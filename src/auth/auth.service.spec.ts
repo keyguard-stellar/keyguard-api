@@ -18,7 +18,7 @@ describe('AuthService', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: (key: string, defaultValue?: any) => {
+            get: (key: string, defaultValue?: unknown) => {
               if (key === 'STELLAR_SERVER_PRIVATE_KEY') {
                 return 'SAWSX2GDIONPN7WLUHKFLJPIMWGHG7OB4VKBHT6YACNZDKL2QHB2Y5ZX';
               }

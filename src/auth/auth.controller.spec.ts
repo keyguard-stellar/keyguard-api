@@ -18,12 +18,10 @@ describe('AuthController', () => {
             generateChallenge: jest
               .fn()
               .mockReturnValue({ transaction: 'mock-tx' }),
-            verifyChallenge: jest
-              .fn()
-              .mockReturnValue({
-                accessToken: 'mock-token',
-                token: 'mock-token',
-              }),
+            verifyChallenge: jest.fn().mockReturnValue({
+              accessToken: 'mock-token',
+              token: 'mock-token',
+            }),
           },
         },
       ],
@@ -39,16 +37,18 @@ describe('AuthController', () => {
 
   it('should call generateChallenge on getChallenge', () => {
     const dto: ChallengeAuthDto = { publicKey: 'G123' };
+    const spy = jest.spyOn(service, 'generateChallenge');
     expect(controller.getChallenge(dto)).toEqual({ transaction: 'mock-tx' });
-    expect(service.generateChallenge).toHaveBeenCalledWith('G123');
+    expect(spy).toHaveBeenCalledWith('G123');
   });
 
   it('should call verifyChallenge on verifyChallenge', () => {
     const dto: VerifyAuthDto = { transaction: 'mock-signed-tx' };
+    const spy = jest.spyOn(service, 'verifyChallenge');
     expect(controller.verifyChallenge(dto)).toEqual({
       accessToken: 'mock-token',
       token: 'mock-token',
     });
-    expect(service.verifyChallenge).toHaveBeenCalledWith('mock-signed-tx');
+    expect(spy).toHaveBeenCalledWith('mock-signed-tx');
   });
 });
