@@ -16,4 +16,14 @@ export const envValidationSchema = Joi.object({
   DB_PASSWORD: Joi.string().allow('').required(),
 
   DB_NAME: Joi.string().required(),
+
+  JWT_SECRET: Joi.string().default('super-secret-jwt-key'),
+
+  STELLAR_NETWORK: Joi.string().valid('TESTNET', 'PUBLIC').default('TESTNET'),
+
+  AUTH_HOME_DOMAIN: Joi.string().default('keyguard.org'),
+
+  STELLAR_SERVER_PRIVATE_KEY: Joi.string().default(
+    'SAWSX2GDIONPN7WLUHKFLJPIMWGHG7OB4VKBHT6YACNZDKL2QHB2Y5ZX',
+  ),
 });

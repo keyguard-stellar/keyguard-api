@@ -7,6 +7,7 @@ import { Controller, Get } from '@nestjs/common';
 
 import { envValidationSchema } from './config/env.validation';
 import { getDatabaseConfig } from './config/database.config';
+import { AuthModule } from './auth/auth.module';
 
 @Controller('health')
 class HealthController {
@@ -38,6 +39,7 @@ class HealthController {
     }),
 
     TerminusModule,
+    AuthModule,
   ],
 
   controllers: [HealthController],
