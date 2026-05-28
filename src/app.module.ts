@@ -7,6 +7,7 @@ import { Controller, Get } from '@nestjs/common';
 
 import { envValidationSchema } from './config/env.validation';
 import { getDatabaseConfig } from './config/database.config';
+import { AuthModule } from './auth/auth.module';
 
 @Controller('health')
 class HealthController {
@@ -17,9 +18,7 @@ class HealthController {
 
   @Get()
   async check() {
-    return this.health.check([
-      async () => this.db.pingCheck('database'),
-    ]);
+    return this.health.check([async () => this.db.pingCheck('database')]);
   }
 }
 
@@ -38,6 +37,7 @@ class HealthController {
     }),
 
     TerminusModule,
+    AuthModule,
   ],
 
   controllers: [HealthController],
