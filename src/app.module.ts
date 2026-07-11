@@ -10,6 +10,7 @@ import { getDatabaseConfig } from './config/database.config';
 import { AuthModule } from './auth/auth.module';
 import { KeysModule } from './keys/keys.module';
 import { MultisigModule } from './multisig/multisig.module';
+import { RecoveryModule } from './recovery/recovery.module';
 
 @Controller('health')
 class HealthController {
@@ -42,6 +43,7 @@ class HealthController {
     AuthModule,
     KeysModule,
     MultisigModule,
+    RecoveryModule,
   ],
   
 
