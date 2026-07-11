@@ -8,6 +8,9 @@ import { Controller, Get } from '@nestjs/common';
 import { envValidationSchema } from './config/env.validation';
 import { getDatabaseConfig } from './config/database.config';
 import { AuthModule } from './auth/auth.module';
+import { KeysModule } from './keys/keys.module';
+import { MultisigModule } from './multisig/multisig.module';
+import { RecoveryModule } from './recovery/recovery.module';
 
 @Controller('health')
 class HealthController {
@@ -38,7 +41,11 @@ class HealthController {
 
     TerminusModule,
     AuthModule,
+    KeysModule,
+    MultisigModule,
+    RecoveryModule,
   ],
+  
 
   controllers: [HealthController],
 })
