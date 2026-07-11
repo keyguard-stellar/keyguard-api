@@ -14,7 +14,6 @@ import { CreateRecoveryDto } from './dto/create-recovery.dto';
 import { ApproveRecoveryDto } from './dto/approve-recovery.dto';
 import { RejectRecoveryDto } from './dto/reject-recovery.dto';
 import { MultisigService } from '../multisig/multisig.service';
-import { NotificationService } from '../notifications/notification.service';
 
 const RECOVERY_WINDOW_HOURS = 48;
 
@@ -26,7 +25,6 @@ export class RecoveryService {
     @InjectRepository(RecoveryRequest)
     private readonly repo: Repository<RecoveryRequest>,
     private readonly multisigService: MultisigService,
-    private readonly notificationService: NotificationService,
   ) {}
 
   async createRequest(
@@ -52,11 +50,9 @@ export class RecoveryService {
       status: RecoveryStatus.PENDING,
       expiresAt,
     });
-    const saved = await this.repo.save(request);
 
-    await this.notifyCoSigners(saved);
-
-    return saved;
+    // Co-signer notification intentionally omitted for now — see PR note.
+    return this.repo.save(request);
   }
 
   async findById(id: string): Promise<RecoveryRequest> {
@@ -154,23 +150,6 @@ export class RecoveryService {
     } catch {
       throw new UnprocessableEntityException(
         'Invalid approval signature for this co-signer',
-      );
-    }
-  }
-
-  private async notifyCoSigners(request: RecoveryRequest): Promise<void> {
-    try {
-      const config = await this.multisigService.findByAccountId(
-        request.accountId,
-      );
-      await this.notificationService.notifyRecoveryRequested(
-        config.signers.map((s) => s.publicKey),
-        request,
-      );
-    } catch (err) {
-      // Notification failure shouldn't roll back an already-created request.
-      this.logger.warn(
-        `Failed to notify co-signers for recovery request ${request.id}: ${err}`,
       );
     }
   }
