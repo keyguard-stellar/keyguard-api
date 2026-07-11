@@ -1,26 +1,177 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  UnprocessableEntityException,
+  Logger,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Keypair } from 'stellar-sdk';
+
+import { RecoveryRequest, RecoveryStatus } from './entities/recovery-request.entity';
 import { CreateRecoveryDto } from './dto/create-recovery.dto';
-import { UpdateRecoveryDto } from './dto/update-recovery.dto';
+import { ApproveRecoveryDto } from './dto/approve-recovery.dto';
+import { RejectRecoveryDto } from './dto/reject-recovery.dto';
+import { MultisigService } from '../multisig/multisig.service';
+import { NotificationService } from '../notifications/notification.service';
+
+const RECOVERY_WINDOW_HOURS = 48;
 
 @Injectable()
 export class RecoveryService {
-  create(createRecoveryDto: CreateRecoveryDto) {
-    return 'This action adds a new recovery';
+  private readonly logger = new Logger(RecoveryService.name);
+
+  constructor(
+    @InjectRepository(RecoveryRequest)
+    private readonly repo: Repository<RecoveryRequest>,
+    private readonly multisigService: MultisigService,
+    private readonly notificationService: NotificationService,
+  ) {}
+
+  async createRequest(
+    requesterId: string,
+    dto: CreateRecoveryDto,
+  ): Promise<RecoveryRequest> {
+    const existingPending = await this.repo.findOne({
+      where: { accountId: dto.accountId, status: RecoveryStatus.PENDING },
+    });
+    if (existingPending) {
+      throw new ConflictException(
+        'A pending recovery request already exists for this account',
+      );
+    }
+
+    const expiresAt = new Date(
+      Date.now() + RECOVERY_WINDOW_HOURS * 60 * 60 * 1000,
+    );
+
+    const request = this.repo.create({
+      ...dto,
+      requesterId,
+      status: RecoveryStatus.PENDING,
+      expiresAt,
+    });
+    const saved = await this.repo.save(request);
+
+    await this.notifyCoSigners(saved);
+
+    return saved;
   }
 
-  findAll() {
-    return `This action returns all recovery`;
+  async findById(id: string): Promise<RecoveryRequest> {
+    const request = await this.repo.findOne({ where: { id } });
+    if (!request) {
+      throw new NotFoundException(`Recovery request ${id} not found`);
+    }
+    return request;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} recovery`;
+  async approve(
+    id: string,
+    approverPublicKey: string,
+    dto: ApproveRecoveryDto,
+  ): Promise<RecoveryRequest> {
+    const request = await this.findById(id);
+    this.assertPending(request);
+
+    const config = await this.multisigService.findByAccountId(
+      request.accountId,
+    );
+    const isAuthorizedSigner = config.signers.some(
+      (s) => s.publicKey === approverPublicKey,
+    );
+    if (!isAuthorizedSigner) {
+      throw new UnprocessableEntityException(
+        'Approver is not a registered co-signer for this account',
+      );
+    }
+
+    this.verifyApprovalSignature(request.id, approverPublicKey, dto.signature);
+
+    request.status = RecoveryStatus.APPROVED;
+    request.approvedBy = approverPublicKey;
+    return this.repo.save(request);
   }
 
-  update(id: number, updateRecoveryDto: UpdateRecoveryDto) {
-    return `This action updates a #${id} recovery`;
+  async reject(
+    id: string,
+    _rejecterId: string,
+    dto: RejectRecoveryDto,
+  ): Promise<RecoveryRequest> {
+    const request = await this.findById(id);
+    this.assertPending(request);
+
+    request.status = RecoveryStatus.REJECTED;
+    request.rejectionReason = dto.reason ?? null;
+    return this.repo.save(request);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} recovery`;
+  // Invoked by RecoveryScheduler on a cron.
+  async expireStaleRequests(): Promise<number> {
+    const now = new Date();
+    const stale = await this.repo.find({
+      where: { status: RecoveryStatus.PENDING },
+    });
+    const toExpire = stale.filter((r) => r.expiresAt <= now);
+
+    if (toExpire.length === 0) return 0;
+
+    for (const request of toExpire) {
+      request.status = RecoveryStatus.EXPIRED;
+    }
+    await this.repo.save(toExpire);
+
+    this.logger.log(`Expired ${toExpire.length} stale recovery request(s)`);
+    return toExpire.length;
+  }
+
+  private assertPending(request: RecoveryRequest): void {
+    if (request.status !== RecoveryStatus.PENDING) {
+      throw new ConflictException(
+        `Recovery request is already ${request.status}`,
+      );
+    }
+    if (request.expiresAt <= new Date()) {
+      throw new ConflictException('Recovery request has expired');
+    }
+  }
+
+  private verifyApprovalSignature(
+    requestId: string,
+    signerPublicKey: string,
+    signatureBase64: string,
+  ): void {
+    try {
+      const keypair = Keypair.fromPublicKey(signerPublicKey);
+      const verified = keypair.verify(
+        Buffer.from(requestId),
+        Buffer.from(signatureBase64, 'base64'),
+      );
+      if (!verified) {
+        throw new Error('signature mismatch');
+      }
+    } catch {
+      throw new UnprocessableEntityException(
+        'Invalid approval signature for this co-signer',
+      );
+    }
+  }
+
+  private async notifyCoSigners(request: RecoveryRequest): Promise<void> {
+    try {
+      const config = await this.multisigService.findByAccountId(
+        request.accountId,
+      );
+      await this.notificationService.notifyRecoveryRequested(
+        config.signers.map((s) => s.publicKey),
+        request,
+      );
+    } catch (err) {
+      // Notification failure shouldn't roll back an already-created request.
+      this.logger.warn(
+        `Failed to notify co-signers for recovery request ${request.id}: ${err}`,
+      );
+    }
   }
 }
