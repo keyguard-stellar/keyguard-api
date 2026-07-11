@@ -1,4 +1,10 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateKeyDto } from './create-key.dto';
+import { IsString, IsNotEmpty, MaxLength } from 'class-validator';
 
-export class UpdateKeyDto extends PartialType(CreateKeyDto) {}
+// Only label is mutable per the acceptance criteria — publicKey and
+// ownerId are immutable after creation.
+export class UpdateKeyDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  label: string;
+}
