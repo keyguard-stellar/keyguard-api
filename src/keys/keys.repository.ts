@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KeyRecord } from './entities/key.entity';
 
-
 @Injectable()
 export class KeysRepository {
   constructor(
@@ -16,8 +15,13 @@ export class KeysRepository {
     return this.repo.save(record);
   }
 
-  async findById(id: string): Promise<KeyRecord | null> {
-    return this.repo.findOne({ where: { id } });
+  // Soft-deleted rows are excluded automatically since KeyRecord uses
+  // @DeleteDateColumn.
+  async findByIdAndOwner(
+    id: string,
+    ownerId: string,
+  ): Promise<KeyRecord | null> {
+    return this.repo.findOne({ where: { id, ownerId } });
   }
 
   async findByPublicKey(publicKey: string): Promise<KeyRecord | null> {
@@ -31,7 +35,11 @@ export class KeysRepository {
     });
   }
 
-  async delete(id: string): Promise<void> {
-    await this.repo.delete(id);
+  async update(id: string, data: Partial<KeyRecord>): Promise<void> {
+    await this.repo.update({ id }, data);
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.repo.softDelete({ id });
   }
 }
